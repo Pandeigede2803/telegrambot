@@ -32,10 +32,10 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 bot.onText(/\/remindme (.+) (\d{2}:\d{2})/, async (msg, match) => {
     const chatId = msg.chat.id;
     const reminderText = match[1];
-    const reminderTime = match[2];
+    const inputTime = match[2]; // Waktu dalam format HH:MM
 
-    // Konversi waktu ke WITA
-    const timeInWITA = moment(reminderTime, "HH:mm").tz("Asia/Makassar").format("HH:mm");
+    // Pastikan waktu input dalam zona WITA (GMT+8)
+    const timeInWITA = moment.tz(inputTime, "HH:mm", "Asia/Makassar").format("HH:mm");
 
     await Reminder.create({ chatId, text: reminderText, time: timeInWITA });
 
