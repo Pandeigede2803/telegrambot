@@ -96,7 +96,7 @@ bot.onText(/\/done (\d+)/, async (msg, match) => {
 
 // === Cron Job untuk Mengirim Pengingat Secara Otomatis ===
 cron.schedule('* * * * *', async () => {
-    const now = moment().tz("Asia/Jakarta").format("HH:mm");
+    const now = moment().tz("Asia/Makassar").format("HH:mm"); // WITA (GMT+8)
 
     const reminders = await Reminder.find({ time: now });
 
@@ -107,8 +107,9 @@ cron.schedule('* * * * *', async () => {
         await Reminder.deleteOne({ _id: reminder._id });
     });
 }, {
-    timezone: "Asia/Makassar"
+    timezone: "Asia/Makassar" // Set ke WITA (GMT+8)
 });
+
 
 // Notifikasi bahwa bot sedang berjalan
 console.log(`🤖 ${BOT_NAME} sedang berjalan...`);
