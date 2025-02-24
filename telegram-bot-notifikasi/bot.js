@@ -4,17 +4,10 @@ const TelegramBot = require('node-telegram-bot-api');
 const cron = require('node-cron');
 const moment = require('moment-timezone');
 const Reminder = require('./models/Reminder');
-require('dotenv').config();
 
-
-// Load konfigurasi dari .env
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const BOT_NAME = process.env.BOT_NAME || "Telegram Bot";
-const REMINDER_MESSAGE = process.env.REMINDER_MESSAGE || "📢 Jangan lupa cek tugasmu hari ini! 🚀";
 
-
-
-// Membuat URI koneksi MongoDB dari `.env`
 const MONGO_URI = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}/${process.env.DB_NAME}?retryWrites=true&w=majority`;
 
 // Koneksi ke MongoDB
@@ -24,22 +17,23 @@ mongoose.connect(MONGO_URI, {
 }).then(() => console.log("✅ Terhubung ke MongoDB Atlas"))
   .catch(err => console.error("❌ Gagal koneksi MongoDB:", err));
 
-
 // Inisialisasi bot
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-// === Perintah /remindme untuk Menyimpan Pengingat dengan Waktu ===
-bot.onText(/\/remindme (.+) (\d{2}:\d{2})/, async (msg, match) => {
+// === Perintah /remindme untuk Menyimpan Pengingat dengan Waktu dan Repeat ===
+bot.onText(/\/remindme (.+) (\d{2}:\d{2})(?: (1h|2h|3h))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const reminderText = match[1];
     const inputTime = match[2]; // Waktu dalam format HH:MM
+    const repeatInterval = match[3] || null; // Repeat bisa `1h`, `2h`, atau `3h`
 
     // Pastikan waktu input dalam zona WITA (GMT+8)
     const timeInWITA = moment.tz(inputTime, "HH:mm", "Asia/Makassar").format("HH:mm");
 
-    await Reminder.create({ chatId, text: reminderText, time: timeInWITA });
+    await Reminder.create({ chatId, text: reminderText, time: timeInWITA, repeat: repeatInterval });
 
-    bot.sendMessage(chatId, `✅ Pengingat tersimpan: "${reminderText}" pada ${timeInWITA} WITA.`);
+    let repeatMessage = repeatInterval ? ` (Berulang setiap ${repeatInterval})` : "";
+    bot.sendMessage(chatId, `✅ Pengingat tersimpan: "${reminderText}" pada ${timeInWITA} WITA${repeatMessage}.`);
 });
 
 // === Perintah /list untuk Melihat Semua Pengingat ===
@@ -54,7 +48,8 @@ bot.onText(/\/list/, async (msg) => {
 
     let message = "📋 *Daftar Pengingat:*\n";
     reminders.forEach((reminder, index) => {
-        message += `${index + 1}. ${reminder.text} - ⏰ ${reminder.time}\n`;
+        let repeatInfo = reminder.repeat ? ` 🔄 (Setiap ${reminder.repeat})` : "";
+        message += `${index + 1}. ${reminder.text} - ⏰ ${reminder.time}${repeatInfo}\n`;
     });
 
     bot.sendMessage(chatId, message, { parse_mode: "Markdown" });
@@ -66,7 +61,7 @@ bot.onText(/\/help/, (msg) => {
     const helpMessage = `
 📌 Perintah yang tersedia:
 
-/remindme <pesan> <waktu> - Menyimpan pengingat dengan waktu
+/remindme <pesan> <waktu> [repeat] - Menyimpan pengingat dengan waktu (opsional: \`1h\`, \`2h\`, \`3h\` untuk repeat)
 /list - Melihat semua pengingat
 /done <nomor> - Menghapus pengingat yang selesai
 /help - Menampilkan bantuan
@@ -75,7 +70,7 @@ bot.onText(/\/help/, (msg) => {
     bot.sendMessage(chatId, helpMessage);
 });
 
-// === Perintah /done <nomor> untuk Menghapus Pengingat yang Selesai ===
+// === Perintah /done <nomor> untuk Menghapus Pengingat ===
 bot.onText(/\/done (\d+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     const index = parseInt(match[1]) - 1;
@@ -88,7 +83,6 @@ bot.onText(/\/done (\d+)/, async (msg, match) => {
 
     const removed = reminders[index];
 
-    // Hapus dari database
     await Reminder.deleteOne({ _id: removed._id });
 
     bot.sendMessage(chatId, `✅ Pengingat selesai: "${removed.text}" pada ${removed.time}`);
@@ -97,19 +91,31 @@ bot.onText(/\/done (\d+)/, async (msg, match) => {
 // === Cron Job untuk Mengirim Pengingat Secara Otomatis ===
 cron.schedule('* * * * *', async () => {
     const now = moment().tz("Asia/Makassar").format("HH:mm"); // WITA (GMT+8)
-
     const reminders = await Reminder.find({ time: now });
 
-    reminders.forEach(async (reminder) => {
+    for (let reminder of reminders) {
         bot.sendMessage(reminder.chatId, `⏰ Pengingat: ${reminder.text}`);
 
-        // Hapus pengingat setelah dikirim
-        await Reminder.deleteOne({ _id: reminder._id });
-    });
+        if (reminder.repeat) {
+            let newTime = moment.tz(reminder.time, "HH:mm", "Asia/Makassar");
+
+            if (reminder.repeat === "1h") {
+                newTime.add(1, "hour");
+            } else if (reminder.repeat === "2h") {
+                newTime.add(2, "hours");
+            } else if (reminder.repeat === "3h") {
+                newTime.add(3, "hours");
+            }
+
+            let newFormattedTime = newTime.format("HH:mm");
+
+            await Reminder.updateOne({ _id: reminder._id }, { time: newFormattedTime });
+        } else {
+            await Reminder.deleteOne({ _id: reminder._id });
+        }
+    }
 }, {
-    timezone: "Asia/Makassar" // Set ke WITA (GMT+8)
+    timezone: "Asia/Makassar"
 });
 
-
-// Notifikasi bahwa bot sedang berjalan
 console.log(`🤖 ${BOT_NAME} sedang berjalan...`);
