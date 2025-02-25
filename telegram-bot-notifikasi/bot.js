@@ -88,10 +88,16 @@ bot.onText(/\/done (\d+)/, async (msg, match) => {
     bot.sendMessage(chatId, `✅ Pengingat selesai: "${removed.text}" pada ${removed.time}`);
 });
 
-// === Cron Job untuk Mengirim Pengingat Secara Otomatis ===
 cron.schedule('* * * * *', async () => {
-    const now = moment().tz("Asia/Makassar").format("HH:mm"); // WITA (GMT+8)
+    const now = moment().tz("Asia/Makassar").format("HH:mm");
+    console.log(`🔄 Menjalankan cron job pada ${now}`);
+
     const reminders = await Reminder.find({ time: now });
+
+    if (reminders.length === 0) {
+        console.log("✅ Tidak ada pengingat saat ini.");
+        return;
+    }
 
     for (let reminder of reminders) {
         bot.sendMessage(reminder.chatId, `⏰ Pengingat: ${reminder.text}`);
@@ -109,13 +115,17 @@ cron.schedule('* * * * *', async () => {
 
             let newFormattedTime = newTime.format("HH:mm");
 
-            await Reminder.updateOne({ _id: reminder._id }, { time: newFormattedTime });
+            await Reminder.updateOne({ _id: reminder._id }, { $set: { time: newFormattedTime } });
+
+            console.log(`🔄 Pengingat "${reminder.text}" diperbarui ke ${newFormattedTime}`);
         } else {
             await Reminder.deleteOne({ _id: reminder._id });
+            console.log(`✅ Pengingat "${reminder.text}" dihapus.`);
         }
     }
 }, {
     timezone: "Asia/Makassar"
 });
+
 
 console.log(`🤖 ${BOT_NAME} sedang berjalan...`);
