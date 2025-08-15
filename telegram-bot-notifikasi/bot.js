@@ -146,7 +146,7 @@ cron.schedule('* * * * *', async () => {
     }
 
     for (let reminder of reminders) {
-        bot.sendMessage(reminder.chatId, `🔔 **PENGINGAT AKTIF!**\n\n📝 ${reminder.text}\n⏰ ${moment().tz("Asia/Makassar").format("HH:mm")} WITA\n📅 ${moment().tz("Asia/Makassar").format("DD/MM/YYYY")}`, { parse_mode: "Markdown" });
+        bot.sendMessage(reminder.chatId, `🔔!\n\n📝 ${reminder.text}\n⏰ ${moment().tz("Asia/Makassar").format("HH:mm")} WITA\n📅 ${moment().tz("Asia/Makassar").format("DD/MM/YYYY")}`, { parse_mode: "Markdown" });
 
         if (reminder.repeat) {
             let newTime = moment.tz(reminder.time, "HH:mm", "Asia/Makassar");
